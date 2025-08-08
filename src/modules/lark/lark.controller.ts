@@ -12,13 +12,13 @@ export class LarkController {
 
   @Get()
   @ApiOperation({ summary: 'Danh sách nhóm chat' })
-  async getListChatGroup() {
+  async getChatList() {
     return this.larkService.getChatList();
   }
 
-  @Post('export')
+  @Post()
   @ApiOperation({ summary: 'Export tin nhắn Lark ra file Excel' })
-  async export(@Body() dto: ExportLarkDto, @Res() res: Response) {
+  async exportMessages(@Body() dto: ExportLarkDto, @Res() res: Response) {
     return await this.larkService.exportMessages(dto.chatId, res);
   }
 }
