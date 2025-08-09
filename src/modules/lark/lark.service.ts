@@ -149,9 +149,14 @@ export class LarkService {
   }
 
   async exportMessages(dto: ExportLarkDto, res: Response): Promise<void> {
-    const token = await this.getTenantAccessToken();
-    const messages = await this.fetchMessages(dto, token);
-    const parsed = await this.parseMessages(messages, token);
-    await this.exportToGoogleSheet(parsed, this.sheetId, res);
+    try {
+      const token = await this.getTenantAccessToken();
+      const messages = await this.fetchMessages(dto, token);
+      const parsed = await this.parseMessages(messages, token);
+      await this.exportToGoogleSheet(parsed, this.sheetId, res);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
 }
