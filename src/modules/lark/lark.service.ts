@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
-import * as ExcelJS from 'exceljs';
+import { google } from 'googleapis';
 import { Response } from 'express';
 import { ExportLarkDto } from './dto/export_lark.dto';
 
@@ -8,6 +8,7 @@ import { ExportLarkDto } from './dto/export_lark.dto';
 export class LarkService {
   private readonly appId = process.env.APP_ID;
   private readonly appSecret = process.env.APP_SECRET;
+  private readonly sheetId = process.env.SHEET_ID;
 
   private async getTenantAccessToken(): Promise<string> {
     const url =
@@ -97,32 +98,60 @@ export class LarkService {
     return parsed;
   }
 
-  private async exportToExcel(values: any[], res: Response) {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Messages');
+  async exportToGoogleSheet(values: any[], sheetId: string, res: Response) {
+    try {
+      // Load credentials
+      const auth = new google.auth.GoogleAuth({
+        keyFile: 'credentials.json',
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
 
-    worksheet.addRow(['Thời gian', 'Người gửi', 'Nội dung']);
-    values.forEach((row) => worksheet.addRow(row));
+      const sheets = google.sheets({ version: 'v4', auth });
 
-    // Xuất file ra buffer
-    const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
+      const sheetName = `Export_${new Date().toISOString().replace(/[:.]/g, '-')}`;
 
-    // Trả file về client mà không lưu trên server
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="messages_${Date.now()}.xlsx"`,
-    );
-    res.send(buffer);
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: sheetName,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      const data = [['Thời gian', 'Người gửi', 'Nội dung'], ...values];
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `${sheetName}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: data,
+        },
+      });
+
+      res.json({
+        success: true,
+        message: 'Đã ghi dữ liệu vào Google Sheet',
+        sheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}/edit#gid=0`,
+        sheetName,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
 
   async exportMessages(dto: ExportLarkDto, res: Response): Promise<void> {
     const token = await this.getTenantAccessToken();
     const messages = await this.fetchMessages(dto, token);
     const parsed = await this.parseMessages(messages, token);
-    await this.exportToExcel(parsed, res);
+    await this.exportToGoogleSheet(parsed, this.sheetId, res);
   }
 }
