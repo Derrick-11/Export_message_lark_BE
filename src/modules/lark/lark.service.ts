@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import * as ExcelJS from 'exceljs';
 import { Response } from 'express';
+import { ExportLarkDto } from './dto/export_lark.dto';
 
 @Injectable()
 export class LarkService {
@@ -48,14 +49,26 @@ export class LarkService {
     return chats;
   }
 
-  private async fetchMessages(chatId: string, token: string) {
+  private async fetchMessages(dto: ExportLarkDto, token: string) {
     const url = 'https://open.larksuite.com/open-apis/im/v1/messages';
     const headers = { Authorization: `Bearer ${token}` };
+    const { chatId, startTime, endTime } = dto;
+
     const params: any = {
       container_id_type: 'chat',
       container_id: chatId,
       page_size: 50,
+      sort_type: 'ByCreateTimeAsc',
     };
+
+    if (startTime) {
+      params.start_time = Math.floor(new Date(startTime).getTime() / 1000);
+    }
+
+    if (endTime) {
+      params.end_time = Math.floor(new Date(endTime).getTime() / 1000);
+    }
+
     let messages = [];
 
     while (true) {
@@ -64,6 +77,7 @@ export class LarkService {
       if (!resp.data?.data?.has_more) break;
       params.page_token = resp.data?.data?.page_token;
     }
+
     return messages;
   }
 
@@ -105,9 +119,9 @@ export class LarkService {
     res.send(buffer);
   }
 
-  async exportMessages(chatId: string, res: Response): Promise<void> {
+  async exportMessages(dto: ExportLarkDto, res: Response): Promise<void> {
     const token = await this.getTenantAccessToken();
-    const messages = await this.fetchMessages(chatId, token);
+    const messages = await this.fetchMessages(dto, token);
     const parsed = await this.parseMessages(messages, token);
     await this.exportToExcel(parsed, res);
   }

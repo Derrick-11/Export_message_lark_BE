@@ -19,6 +19,6 @@ export class LarkController {
   @Post()
   @ApiOperation({ summary: 'Export tin nhắn Lark ra file Excel' })
   async exportMessages(@Body() dto: ExportLarkDto, @Res() res: Response) {
-    return await this.larkService.exportMessages(dto.chatId, res);
+    return await this.larkService.exportMessages(dto, res);
   }
 }
